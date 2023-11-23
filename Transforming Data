@@ -1,0 +1,12 @@
+Wave2 <- read_csv("FON_survey_9866_combined.csv")
+
+Q26 <- select(Wave2, `Q26`)
+
+resp.split26 <- strsplit(Q26$`Q26`, split = "|", fixed=TRUE)
+
+lev26 <- unique(unlist(resp.split26))
+
+resp.dummy26 <- lapply(resp.split26, function(x) table(factor(x, levels=lev26)))
+Q26.2 <- with(Q26, data.frame(do.call(rbind, resp.dummy26)))
+
+write.csv(Q26.2, "Q26.csv", row.names = FALSE)
