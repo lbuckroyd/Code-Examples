@@ -1,8 +1,8 @@
-## Dissertation - Produce Clean Data File ##
-## Date: 10/11/21
+## National Identity x General Election - Dissertation ##
+## Date: 21/04/22
 
 rm(list=ls())
-setwd('C:/Users/Liddy/OneDrive - Durham University/Final Year/Dissertation/Coding/Data')
+setwd('C:/Users/Lydia/OneDrive - Durham University/Final Year/Dissertation/Coding/Data')
 
 ### Load Packages ###
 
@@ -19,7 +19,7 @@ BES_W20 <- read_sav("BES2019_W20.sav")  ## Load W20 data file (June 2020)
 Results <- read_excel("BES-2019-General-Election-results.xlsx")  ## Load election results for constituency-level controls
 
 ### Selecting Columns ###
-BES_W17.clean <- BES_W17 %>%   ## Select desired columns to begin cleaned datasets 
+BES_W17.clean <- BES_W17 %>%    
   select(id,
          country,
          pcon,
@@ -43,7 +43,7 @@ BES_W20.clean <- BES_W20 %>%
          partyIdStrength,
          britishness,
          handleCorona,
-         )
+  )
 
 ### Clean/rename/remove wave data ###
 
@@ -94,25 +94,25 @@ BES.clean <- merge(BES_W17.clean, BES_W20.clean, by = 'id')
 view(BES.clean)
 
 col_names <- c('id',           ## Renaming columns to distinguish W17 and W20
-                 'country', 
-                 'pcon', 
-                 'partyId_pre', 
-                 'partyIdStrength_pre', 
-                 'britishness_pre',
-                 'efficacyTooMuchEffort',
-                 'efficacyNotUnderstand',
-                 'efficacyNoMatter',
-                 'efficacyPolCare',
+               'country', 
+               'pcon', 
+               'partyId_pre', 
+               'partyIdStrength_pre', 
+               'britishness_pre',
+               'efficacyTooMuchEffort',
+               'efficacyNotUnderstand',
+               'efficacyNoMatter',
+               'efficacyPolCare',
                'gender',
                'socgrade',
                'education',
                'electionInterest',
                'freqconversation',
-                 'pcon_post',
-                 'partyId_post',
-                 'partyIdStrength_post',
-                 'britishness_post',
-                 'handleCorona')
+               'pcon_post',
+               'partyId_post',
+               'partyIdStrength_post',
+               'britishness_post',
+               'handleCorona')
 colnames(BES.clean) <- col_names
 
 ### Creating grouped party ID variable ###
@@ -138,15 +138,15 @@ BES.clean <- BES.clean %>%
                            TRUE ~ as.character(country)))
 BES.clean <- BES.clean %>%
   mutate(scotland = case_when(country == 'WALES' ~ '0',
-                           country == 'SCOT' ~ '1',
-                           country == 'ENG' ~ '0',
-                           TRUE ~ as.character(country)))
+                              country == 'SCOT' ~ '1',
+                              country == 'ENG' ~ '0',
+                              TRUE ~ as.character(country)))
 BES.clean <- BES.clean %>%
   mutate(england = case_when(country == 'WALES' ~ '0',
-                              country == 'SCOT' ~ '0',
-                              country == 'ENG' ~ '1',
-                              TRUE ~ as.character(country)))
-t
+                             country == 'SCOT' ~ '0',
+                             country == 'ENG' ~ '1',
+                             TRUE ~ as.character(country)))
+
 BES.clean$wales <- as.numeric(as.character(BES.clean$wales))
 BES.clean$scotland <- as.numeric(as.character(BES.clean$scotland))
 BES.clean$england <- as.numeric(as.character(BES.clean$england))
@@ -167,9 +167,9 @@ BES.clean <- BES.clean %>%                    ## Creating dependent variable of 
 
 BES.clean <- BES.clean %>%                    ## Creating dummy variable for winning/losing - 1=win, 0=lose
   mutate(winlose_nat = case_when(partyID > 1 ~ 0,
-                             TRUE ~ 1))
+                                 TRUE ~ 1))
 
-### Creating constituency results dataset ###
+################################# Creating constituency results dataset ##############################
 
 BES_con.clean <- BES.clean %>%                     ## Subsetting cases where individual has not moved
   subset(pcon == pcon_post)
@@ -193,7 +193,7 @@ BES_con.clean <- BES_con.clean %>%                    ## Creating easier results
                             Winner19 == 'SNP' ~ '4',
                             Winner19 == 'PC' ~ '5',
                             Winner19 == 'G' ~ '6',
-                             TRUE ~ as.character(Winner19)))
+                            TRUE ~ as.character(Winner19)))
 table(BES_con.clean$result)
 
 
@@ -213,7 +213,164 @@ BES_con.clean <- BES_con.clean %>%      ##lose-lose dummy variable
   mutate(loselose = ifelse(partyID > '1' & partyID != result , 1, 0))
 table(BES_con.clean$loselose)
 
-### Producing dataset for stepwise regression ###
 
-BES.clean2 <- BES.clean %>%          
-  drop_na(efficacy, education, socgrade, freqconversation, electionInterest, gender)
+############################ Modelling Regression for National Results ######################################
+
+full.modelH1 <- lm(id_change ~ winlose_nat +             
+                     handleCorona +
+                     education +
+                     freqconversation +
+                     partyIdStrength_pre +
+                     britishness_pre +
+                     scotland +
+                     wales +
+                     england +
+                     gender +
+                     socgrade,
+                   data = BES_con.clean)
+summary(full.modelH1)
+
+stargazer(full.modelH1, type="html",
+          covariate.labels = c('Winner (vs. Loser) (Nationally)',
+                               'Approval of Government Handling of Coronavirus',
+                               'Education',
+                               'Frequency of Political Conversations',
+                               'Strength of Partisan Identity (Pre-Election)',
+                               'Strength of British Identity (Pre-Election)',
+                               'Scotland',
+                               'Wales',
+                               'England',
+                               'Gender',
+                               'Social Grade'),
+          dep.var.labels = 'Change in National Identity',
+          out="H1 (all controls).html")
+
+############################### Modelling Regression for National-Constituency Results ######################
+
+H2_controls1 <- lm(id_change ~ winwin +             
+                     handleCorona +
+                     freqconversation +
+                     partyIdStrength_pre +
+                     britishness_pre +
+                     wales +
+                     scotland +
+                     education +
+                     gender +
+                     socgrade +
+                     efficacy
+                   , data = BES_con.clean)
+summary(H2_controls1)
+
+H2_controls2 <- lm(id_change ~ winlose +             
+                     handleCorona +
+                     freqconversation +
+                     partyIdStrength_pre +
+                     britishness_pre +
+                     wales +
+                     scotland +
+                     education +
+                     gender +
+                     socgrade  +
+                     efficacy
+                   , data = BES_con.clean)
+summary(H2_controls2)
+
+H2_controls3 <- lm(id_change ~ losewin +            
+                     handleCorona +
+                     freqconversation +
+                     partyIdStrength_pre +
+                     britishness_pre +
+                     wales +
+                     scotland +
+                     education +
+                     gender +
+                     socgrade  +
+                     efficacy
+                   , data = BES_con.clean)
+summary(H2_controls3)
+
+H2_controls4 <- lm(id_change ~ loselose +             
+                     handleCorona +
+                     freqconversation +
+                     partyIdStrength_pre +
+                     britishness_pre +
+                     wales +
+                     scotland +
+                     education +
+                     gender +
+                     socgrade  +
+                     efficacy, data = BES_con.clean)
+summary(H2_controls4)
+
+stargazer(H2_controls1, H2_controls2, H2_controls3, H2_controls4, type = 'html',
+          covariate.labels = c('Win-Win (National-Constituency)',
+                               'Win-Lose (National-Constituency)',
+                               'Lose-Win (National-Constituency)',
+                               'Lose-Lose (National-Constituency)',
+                               'Approval of Government Handling of Coronavirus',
+                               'Frequency of Political Conversations',
+                               'Strength of Partisan Identity (Pre-Election)',
+                               'Strength of British Identity (Pre-Election)',
+                               'Wales',
+                               'Scotland',
+                               'Education',
+                               'Gender',
+                               'Social Grade'),
+          dep.var.labels = 'Change in National Identity',
+          out = 'H2 (all controls).html')
+
+
+######################## Predicting probable effect of national-constituency results interaction ########################
+
+BES_con.clean <- BES_con.clean %>%                      ##Creating grouped variable for H2
+  mutate(H2 = case_when(winwin == '1' ~ '1',
+                        TRUE ~ as.character(0)))
+BES_con.clean <- BES_con.clean %>%
+  mutate(H2 = case_when(winlose == '1' ~ '2',
+                        TRUE ~ as.character(H2)))
+BES_con.clean <- BES_con.clean %>%
+  mutate(H2 = case_when(losewin == '1' ~ '3',
+                        TRUE ~ as.character(H2)))
+BES_con.clean <- BES_con.clean %>%
+  mutate(H2 = case_when(loselose == '1' ~ '4',
+                        TRUE ~ as.character(H2)))
+table(BES_con.clean$H2)
+
+a <- predict(H2_controls1)
+b <- predict(H2_controls2)
+c <- predict(H2_controls3)
+d <- predict(H2_controls4)
+
+predictH2 <- BES_con.clean               ##Adding predicted values to new dataset
+predictH2 <- predictH2 %>%
+  drop_na(partyIdStrength_pre, 
+          handleCorona, 
+          country,
+          efficacy,
+          gender,
+          socgrade,
+          education,
+          freqconversation)
+predictH2$id_change_predict1 <- a
+predictH2$id_change_predict2 <- b
+predictH2$id_change_predict3 <- c
+predictH2$id_change_predict4 <- d
+
+predictH2 <- predictH2 %>%               ## Telling R which predicted value to use for each scenario
+  mutate(id_change_predict = case_when(H2 == '1' ~ as.character(id_change_predict1),
+                                       H2 == '2' ~ as.character(id_change_predict2),
+                                       H2 == '3' ~ as.character(id_change_predict3),
+                                       H2 == '4' ~ as.character(id_change_predict4),
+                                       TRUE ~ as.character(H2)))
+
+predictH2$id_change_predict <- as.numeric(as.character(predictH2$id_change_predict))
+
+H2_predictedchange <- ggplot(predictH2, aes(y = id_change_predict, x = H2, group = H2)) +            ##Creating boxplot using predicted values, confidence = 0.95
+  geom_boxplot() +
+  scale_x_discrete(breaks = as.numeric(c('1', '2', '3', '4')), labels = as.character(c('Win-Win', 'Win-Lose', 'Lose-Win', 'Lose-Lose'))) +
+  scale_y_continuous(breaks = as.numeric(c(-1.0, -0.8, -0.6, -0.4, -0.2, 0.0, 0.2, 0.4, 0.6, 0.8, 1.0)),
+                     limits = as.numeric(c(-1.0, 1.0)))+
+  geom_hline(yintercept = 0, linetype = 'dashed') +
+  labs(y = 'Predicted Change in National Identity', x = 'National-Constituency Election Result')
+
+ggsave("H2 (predicted change).jpg", plot = H2_predictedchange)
