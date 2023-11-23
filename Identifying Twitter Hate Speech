@@ -1,0 +1,413 @@
+###Twitter Hate Speech - Machine-Learning 
+##Lydia Buckroyd
+##16/07/2021
+
+##Set working directory
+setwd("C:/Users/Liddy/OneDrive - Durham University/Brexit Hate Speech Research")
+
+rm(list = ls())
+
+## Load packages ##
+
+library(data.table)
+library(quanteda)
+library(tidyverse)
+library(qdap)
+library(lexicon)
+library(caret)
+
+data("profanity_alvarez")
+data("profanity_arr_bad")
+data("profanity_banned")
+data("profanity_racist")
+data("profanity_zac_anger")
+
+## Adding Tweets to the dataset ##
+data <- read.csv("R Coding/data_2.csv")  
+view(data)
+
+sample.data <- read.csv("C:/Users/Liddy/Dropbox/BrexitTweets/data_sample.csv")
+sample.data$Tweet <- as.character(as.factor(sample.data$Tweet))
+
+######################## Prepare data ###########################
+
+## Count number of words by tweet
+
+data$Tweet <- as.character(data$Tweet)
+data$number_words <- word_count(data$Tweet)
+
+## Create corpus of Twitter data
+
+tweet_corpus <- corpus(data, text_field="Tweet")
+summary(tweet_corpus, n=2)
+
+sample_corpus <- corpus(sample.data, text_field = "Tweet")
+
+## Create document-feature matrix
+
+dfm_data <- dfm(tweet_corpus)
+check_dfm = convert(dfm_data, to="data.frame")
+
+## Calculate how readable the Tweets are
+
+results_readability <- textstat_readability(tweet_corpus, measure="Flesch")
+names(results_readability)
+head(results_readability)
+
+## Merge results with data frame
+
+data = cbind(data, results_readability)
+view(data)
+
+###################### Apply dictionary #############################
+
+## Create dictionary
+
+profanity_own <- list(offensive = c("anus", "arse", "arsehole", "ass", "ass hat", "ass jabber", "ass pirate", "assbag", 
+                        "assbandit", "assbanger", "assbite", "assclown", "asscock", "asscracker", "asses", 
+                        "assface", "assfuck", "assfucker", "assgoblin", "asshat", "asshead", "asshole", "asshopper", 
+                        "assjacker", "asslick", "asslicker", "assmonkey", "assmunch", "assmuncher", "assnigger", "aspirate", "assshit", "assshole", "asssucker", "asswad", "asswipe", 
+                        "axwound", "bampot", "bastard", "beaner", "bitch", "bitchass", "bitches", "bitchtits", "bitchy", "blow job", "blowjob", "bollocks", "bollox", "boner", "brotherfucker", 
+                        "bullshit", "bumblefuck", "butt plug", "butt pirate", "buttfucka", "buttfucker", "camel toe", "carpetmuncher", "chesticle", "chinc", "chink", "choad", "chode", "clit", 
+                        "clitface", "clitfuck", "clitweasel", "clusterfuck", "cock", "cockass", "cockbite", "cockburger", "cockface", "cockfucker", "cockhead", "cockjockey", "cockknoker", "cockmaster", 
+                        "cockmongler", "cockmongruel", "cockmonkey", "cockmuncher", "cocknose", "cocknugget", "cockshit", "cocksmith", "cocksmoke", "cocksmoker", "cocksniffer", "cocksucker", "cockwaffle", 
+                        "coochie", "coochy", "coon", "cooter", "cracker", "cum", "cumbubble", "cumdumpster", "cumguzzler", "cumjockey", "cumslut", "cumtart", "cunnie", "cunnilingus", "cunt", "cuntass", "cuntface", 
+                        "cunthole", "cuntlicker", "cuntrag", "cuntslut", "dago", "damn", "deggo", "dick", "dick sneeze", "dickbag", "dickbeaters", "dickface", "dickfuck", "dickfucker", "dickhead", "dickhole", "dickjuice", 
+                        "dickmilk", "dickmonger", "dicks", "dickslap", "dicksucker", "dicksucking", "dicktickler", "dickwad", "dickweasel", "dickweed", "dickwod", "dike", "dildo", "dipshit", "docking", "doochbag", 
+                        "dookie", "douche", "douche fag", "douchebag", "douchewaffle", "dumass", "dumb ass", "dumbass", "dumbfuck", "dumbshit", "dumshit", "dyke", "fag", "fagbag", "fagfucker", "faggit", "faggot", 
+                        "faggotcock", "fagnut", "fagtard", "fatass", "fellatio", "feltch", "flamer", "fuck", "fuckass", "fuckbag", "fuckboy", "fuckbrain", "fuckbutt", "fuckbutter", "fucked", "fucker", "fuckersucker", 
+                        "fuckface", "fuckhead", "fuckhole", "fuckin", "fucking", "fucknose", "fucknut", "fucknutt", "fuckoff", "fucks", "fuckstick", "fucktard", "fucktart", "fuckup", "fuckwad", "fuckwit", "fuckwitt", 
+                        "fudgepacker", "gay", "gayass", "gaybob", "gaydo", "gayfuck", "gayfuckist", "gaylord", "gaytard", "gaywad", "goddamn", "goddamnit", "gooch", "gook", "gringo", "guido", "handjob", "hard on", 
+                        "heed", "hell", "ho", "hoe", "homo", "homodumbshit", "honkey", "humping", "jackass", "jagoff", "jap", "jerk off", "jerkass", "jigaboo", "jizz", "jungle bunny", "junglebunny", "kikw", "kooch", 
+                        "kootch", "kraut", "kunt", "kyke", "lameass", "lardass", "lesbian", "lesbo", "lezzie", "masturbate", "mcfagget", "mick", "minge", "mothafucka", "mothafuckin", "motherfucker", "motherfucking", 
+                        "muff", "muffdiver", "munging", "nazi", "negro", "nigaboo", "nigga", "nigger", "niggerish", "niggers", "niglet", "nignog", "nut sack", "nutsack", "paki", "panooch", "pecker", "peckerhead", "penis", 
+                        "penisbanger", "penisfucker", "penispuffer", "piss", "pissed", "pissed off", "pissflaps", "polesmoker", "pollock", "poop", "poonani", "poonany", "poontang", "porch monkey", "porchmonkey", "prick", 
+                        "punanny", "punta", "pussies", "pussy", "pussylicking", "puto", "queef", "queer", "queerbait", "queerhole", "renob", "rimjob", "ruski", "sand nigger", "sandnigger", "schlong", "scrote", "shit", 
+                        "shitass", "shitbag", "shitbagger", "shitbrains", "shitbreath", "shitcanned", "shitcunt", "shitdick", "shitface", "shitfaced", "shithead", "shithole", "shithouse", "shitspitter", "shitstain", 
+                        "shitter", "shittiest", "shitting", "shitty", "shiz", "shiznit", "skank", "skeet", "skullfuck", "slut", "slutbag", "smeg", "snatch", "spic", "spick", "splooge", "spook", "suckass", "tard", 
+                        "testicle", "thundercunt", "tit", "titfuck", "tits", "tittyfuck", "twat", "twatlips", "twats", "twatwaffle", "uglyfuck", "unclefucker", "vajj", "vag", "vagina", "vajayjay", "vjayjay", "wank", 
+                        "wankjob", "wetback", "whore", "whoreface", "wop", "6 gorillion", "abbo", "abbos", "ABC", "ABCD", "ABCDs", "ABCs", "abo", "abos", "af", "African catfish", "African catfishes", "african’t", 
+                        "african’ts", "Africoon", "Africoons", "Afro-Saxon", "Afro-Saxons", "afs", "Ahab", "Ahabs", "albino", "albinos", "albo", "alboes", "albos", "alligator bait", "Americoon", "Americoons", 
+                        "AmeriKKKan", "Amo", "Amos", "anchor babies", "anchor baby", "Angie", "Angies", "Anglo", "Anglo fool", "Anglos", "Ann", "Annies", "Anns", "ape", "apes", "apples", "apple", "Argie", "Argies", 
+                        "Armo", "Armos", "ars", "arsim", "arsit", "Aunt Jane", "Aunt Janes", "Aunt Jemima", "Aunt Jemimas", "Aunt Mary", "Aunt Marys", "Aunt Sally", "Aunt Sallys", "azn", "azns", "bamboo coons", 
+                        "ban and can", "bamboo coon", "banana benders", "banana bender", "banana lander", "banana landers", "bananas", "banjo lips", "bans and cans", "batiman", "batimen", "batty boy", "batty boy", 
+                        "batty boys", "batty bwoy", "batty bwoys", "batty man", "batty men", "battyman", "battymen", "beach nigger", "beach niggers", "bean bandit", "bean bandits", "bean dipper", "bean dippers", 
+                        "beaner", "beaner babies", "beaner baby", "beaner shnitzel", "beaner shnitzels", "beaners", "beaney", "beanies", "beckies", "Becky", "Beckys", "Bengali", "Bengalis", "bhrempti", "bhremptis", 
+                        "Bihari", "Biharis", "bimbo", "bint", "bints", "bird", "birds", "bitch", "bitches", "bitter clingers", "bix nood", "bix noods", "black Barbie", "black Barbies", "black dago", "black dagoes", 
+                        "black dagos", "black invader", "black invaders", "blaxican", "blaxicans", "blockhead", "blockheads", "bludger", "blue gum", "blue gums", "bluegum", "bluegums", "bog hopper", "bog hoppers", 
+                        "Bog Irish", "bog jumper", "bog jumpers", "bog trotter", "bog trotters", "bogan" , "bogans", "bohunk", "bohunks", "bong", "bongs", "boo", "boogat", "boogats", "boojie", "boojies", "book book", 
+                        "book books", "boon", "booner", "booners", "boong", "boonga", "boongas", "boongs", "boonie", "boonies", "boons", "boos", "bootlip", "bootlips", "border babies", "border baby", "border bandit", 
+                        "border bandito", "border banditoes", "border banditos", "border bandits", "border bunnies", "border bunny", "border hopper", "border hoppers", "border jumper", "border jumpers", "border nigger", 
+                        "border niggers", "boujee", "boujees", "Bounty bar", "boxhead", "boxheads", "brass ankle", "brass ankles", "brown invader", "brown invaders", "brownies", "brownie", "bubble", "bubbles", "buck", 
+                        "bucker", "buckers", "buckethead", "bucketheads", "buckra", "buckras", "buckrette", "buckrettes", "bucks", "Buckwheat", "buddhahead", "Buddhaheads", "buffie", "buffies", "buffy", "bug eater", "bug eaters", 
+                        "buk buk", "bull dyke", "bull dykes", "bumblebee", "bumblebees", "bung", "bunga", "bungas", "bungs", "burrhead", "burrheads", "bush bandit", "bush bandits", "bushnigger", "bushniggers", "bushniglet", 
+                        "bushniglets", "butt pirate", "butt pirates", "butterhead", "butterheads", "cab nigger", "cab niggers", "cairo coon", "cairo coons", "camel cowboy", "camel cowboys", "camel fuckers", "camel humper", 
+                        "camel humpers", "camel jacker", "camel jackers", "camel jockey", "camel jockeys", "can and ban", "can eater", "can eaters", "canigger", "caniggers", "canigglet", "cans and bans", "carpet pilot", 
+                        "carpet pilots", "carrot snap", "carrot snappers", "carrot snapper", "carrot snaps", "Caublasian", "Caublasians", "cave nigger", "cave niggers", "celestial", "celestials", "Chad", "Chad Thundercock", 
+                        "Chad Thundercocks", "Chads", "Charlie", "Charlies", "charly", "charva", "charvas", "charver", "charvers", "chav", "chavette", "chavettes", "chavs", "chee chee", "chee chees", "chi chi", "chi chi bwoy", 
+                        "chi chi bwoys", "chi chi man", "chi chi men", "chi chis", "chief", "chigger", "chiggers", "chilli shitter", "chimp pack", "chimp packs", "chimp-out", "chimp-outs", "chimped-out", "Chinaman", "chinamen", 
+                        "Chinese wetback", "Chinese wetbacks", "ching chong", "ching chongs", "chinig", "chinigs", "chink", "chink a billies", "chink a billy", "chinks", "cholo chaser", "cholo chasers", "cholo chasing","chonkies",
+                        "chonky"," Christ killer", "Christ killers", "chug", "chugs", "chunkies", "chunky", "clam", "clamhead", "clamheads", "clamheads", "clams", "clog wog", "closet dyke", "closet dykes", "closet fag", "closet fags",
+                        "closetfag", "closetfags", "cocktease", "cocksucker", "cocksuckers", "cocoa", "cocoa puff", "cocoas", "cocoa puffs", "coconut", "coconuts", "cohee", "cohees", "colored", "coloreds", "coloured", 
+                        "coloureds", "conchuda", "conchudas", "Congoids", "coolie", "coolies", "coon", "coon ass", "coonadian", "coonadians", "coons", "cotton picker", "cotton pickers", "cow kisser", "cow kissers", "cowboy killer", 
+                        "cowboy killers", "cracker", "crackers", "cripple", "cripples", "crow", "croweater", "croweaters", "crows", "culchie", "culchies", "cunt", "cunter", "cunts", "curry muncher", "curry muncher", "curry slurpers", 
+                        "curry slurper", "curry stinker", "curry stinkers", "Cushi", "Cushis", "Cushites", "da goyim know", "dagette", "dagettes", "dago", "dagos", "dagowop", "dagowops", "darkey", "darkie", "darkies", "darky", "degette", 
+                        "degettes", "dego", "degos", "deminigger", "deminiggers", "derka derka", "derka derkas", "dhimmi", "dhimmis", "diaper head", "diaper heads", "dindu", "dindu muffin", "dinge", "dinges", "dingo fucker", "dingo fuckers", 
+                        "dink", "dinkladies", "dinklady", "dinks", "div", "divs", "divvies", "divvy", "dog eater", "dog eaters", "dogan", "dogans", "dogun", "doguns", "dole bludger", "dole bludgers", "domes", "dot head", "dot heads", "dres", 
+                        "dresiarz", "dune coon", "dune nigger", "dune niggers", "durka durka", "durka durkas", "dyke", "dyke jumper", "dyke jumper", "dykes", "egg", "eggplant", "eggs", "eh hole","eh holes", "eight ball", "eight balls", "eshay", 
+                        "eshays", "eurotrash", "eyetie", "fag", "fagbags", "fagdicks", "fagdick", "faggot", "faggots", "faggy", "fags", "fagshit", "fagshits", "fairies", "Fairy", "featherhead", "featherheads", "feminazi", "feminazis", 
+                        "Fenian", "Fenians", "fez", "fezzes", "filthypino", "filthpinoes", "filthypinos", "fish wagon", "flip", "flipabeano", "flipabeanos", "flipette", "flipettes", "flips", "floppies", "floppy", "FOB", "FOBs", "fresh off the boat",
+                        "arsehole", "bampot", "idiot", "stupid", "barmy", "barmpot", "berk", "Billy no-mates", "bint", "blighter", "bloody", "blooming", "bollocks", "bugger", "charva", "chav", "cobblers", "cock-up", "codger", "dago", "divvy", "dozy", "duffer",
+                        "eejit", "git", "Gordon Bennett", "gormless", "grotty", "manky", "minger", "muppet", "naff", "numpty", "nutter", "pikey", "pillock", "pish", "plonker", "poxy", "prat", "shite", "skank", "skank", "piss", "trollop", "wally", "wazzack",
+                        "wanker", "tosser", "twat"))
+
+dict <- dictionary(profanity_own)
+
+## Apply dictionary and save
+
+results_dictionary <-  dfm_lookup(dfm_data, dictionary = dict)
+results_dictionary <- convert(results_dictionary, to="data.frame")
+
+data <- cbind(data, results_dictionary)
+data$offensive_share <- data$offensive/data$number_words  ## Calculate share of offensive words within Tweet set
+
+write.csv(data, "R Coding/data_3.csv")
+
+######################### Explorative Analysis ###############################
+
+## Disagreement between handcoding and dictionary
+
+offdisagree.data <- filter(data, (Level_A == "OFF" & offensive == 0)|
+                             (Level_A == "NOT" & offensive == 1)|
+                             (Level_A == "NOT" & offensive == 2)) 
+
+## Code dummy variable for agree/disagree
+
+data$offensive.disagree = ifelse((data$Level_A == "OFF" & data$offensive == 0)|
+                                   (data$Level_A == "NOT" & data$offensive == 1)|
+                                   (data$Level_A == "NOT" & data$offensive == 2), 
+                                 1, 0)
+
+## Proportion of offensive tweets, dictionary versus handcoding
+
+table(data$Level_A)
+(103/500)*100
+table(data$offensive)
+(32/500)*100
+
+## Dataset/Wordcloud of most common offensive words (dict)
+
+offtweets_data <- filter(data, offensive == 1)
+offtweets_corpus <- corpus(offtweets_data, text_field = "Tweet")
+
+toks_offtweets <- tokens(offtweets_corpus, remove_punct = TRUE)
+toks_offtweets <- tokens_select(toks_offtweets, stopwords("en"), min_nchar = 3L, selection = "remove")
+toks_offtweets <- tokens_tolower(toks_offtweets)
+toks_offtweets <- tokens_remove(toks_offtweets, c("amp", "it?"))
+dfm_offtweets <- dfm(toks_offtweets)
+view(dfm_offtweets)
+
+offtweets_tokfreq <- textstat_frequency(dfm_offtweets)
+view(offtweets_tokfreq)
+
+set.seed(132)
+textplot_wordcloud(dfm_offtweets, max_words = 100)
+
+## Collations of words in offensive tweets (dict)
+offtweets_coll <- textstat_collocations(toks_offtweets)
+view(offtweets_coll)
+
+################## Partisan Explorative Analysis #######################
+
+#Tidy partisanship coding
+data$Partisan <- as.character(as.factor(data$Partisan))
+data$Partisan[data$Partisan == "Neut"] <- "unclear"                   ##Remove Neutral classification value and merge with NAs
+data$Partisan[data$Partisan == ""] <- "unclear"
+data$Partisan[is.na(data$Partisan)] <- "unclear"
+
+table(data$Partisan)
+
+#Bar chart proportions of Right vs. Left
+ggplot(data, aes(x = Partisan)) +
+  geom_bar(aes(fill = Partisan)) +
+  scale_x_discrete(labels = as_labeller(c("L" = "Left-Wing", "R" = "Right-Wing", "unclear" = "Unclear"))) +
+  theme(legend.position = "none") +
+  labs(x = "Partisan Leaning", y = "Count", fill = "Legend")
+
+###Proportions of Hate Speech, depending on partisanship###
+#Dictionary classification model
+dictpartisan_hate <- select(data, Tweet, Partisan, offensive)
+dictpartisan_hate$off_binary.dict <- case_when(dictpartisan_hate$offensive == "1" ~ "1",
+                                               dictpartisan_hate$offensive == "2" ~ "1",
+                                  TRUE ~ as.character(dictpartisan_hate$offensive))     ##Code dummy variable of dictionary offensive versus not
+dictpartisan_hate$off_partisan <- ifelse((dictpartisan_hate$off_binary.dict == "1" & dictpartisan_hate$Partisan == "R"), 1, 
+                                     ifelse((dictpartisan_hate$off_binary.dict == "1" & dictpartisan_hate$Partisan == "L"), 2, 
+                                            ifelse((dictpartisan_hate$off_binary.dict == "1" & dictpartisan_hate$Partisan == "unclear"), 3, 0)))
+dictpartisan_hate$off_partisan <- na_if(dictpartisan_hate$off_partisan, "0")
+dictpartisan_hate$off_partisan <- as.character(as.numeric(dictpartisan_hate$off_partisan))
+table(dictpartisan_hate$off_partisan)
+view(dictpartisan_hate)
+
+ggplot(remove_missing(dictpartisan_hate, na.rm = TRUE, vars = "off_partisan"), aes(x = off_partisan)) +
+  geom_bar(aes(fill = off_partisan)) +
+  scale_x_discrete(labels = as_labeller(c("1" = "Right-Wing", "2" = "Left-Wing", "3" = "Missing Data"))) +
+  theme(legend.position = "none") +
+  labs(x = "Partisanship", y = "Count")
+
+#Hand-coded classification model
+handpartisan_hate <- select(data, Tweet, Partisan, Level_A)
+handpartisan_hate$off_partisan <- ifelse((handpartisan_hate$Level_A == "OFF" & dictpartisan_hate$Partisan == "R"), 1, 
+                                         ifelse((handpartisan_hate$Level_A == "OFF" & dictpartisan_hate$Partisan == "L"), 2, 
+                                                ifelse((handpartisan_hate$Level_A == "OFF" & dictpartisan_hate$Partisan == "unclear"), 3, 0)))
+handpartisan_hate$off_partisan <- na_if(handpartisan_hate$off_partisan, "0")
+handpartisan_hate$off_partisan <- as.character(as.numeric(handpartisan_hate$off_partisan))
+table(handpartisan_hate$off_partisan)
+view(handpartisan_hate)
+
+ggplot(remove_missing(handpartisan_hate, na.rm = TRUE, vars = "off_partisan"), aes(x = off_partisan)) +
+  geom_bar(aes(fill = off_partisan)) +
+  scale_x_discrete(labels = as_labeller(c("1" = "Right-Wing", "2" = "Left-Wing", "3" = "Missing Data"))) +
+  theme(legend.position = "none") +
+  labs(x = "Partisanship", y = "Count")
+
+###Targetting of Hate Speech, Depending on Partisanship###
+B_partisan <- filter(data, Level_A == "OFF")
+B_partisan <- select(B_partisan, Tweet, Level_B, Partisan)
+view(B_partisan)
+
+ggplot(B_partisan, aes(x = Level_B, fill = Partisan)) +
+  geom_bar(position = "stack")
+
+###Level_C, depending on partisanship###
+C_partisan <- filter(data, Level_A == "OFF")
+C_partisan <- select(C_partisan, Tweet, Level_C, C_type, Partisan)
+C_partisan$Level_C <- na_if(C_partisan$Level_C, "NULL")
+view(C_partisan)
+
+#Bar Chart of Level_C
+ggplot(remove_missing(C_partisan, na.rm = TRUE, vars = "Level_C"), aes(x = Level_C, fill = Partisan)) +
+  geom_bar(position = "stack") +
+  scale_x_discrete(labels = as_labeller(c("GRP" = "Group", "IND" = "Individual", "OTH" = "Other", "NULL" = ""))) +
+  labs(x = "Type of Target", y = "Count", legend = "Partisanship")
+
+#Bar Chart of Level_C Type
+C_partisan$C_type <- na_if(C_partisan$C_type, "")
+
+ggplot(remove_missing(C_partisan, na.rm = TRUE, vars = "C_type"), aes(x = C_type, fill = Partisan)) +
+  geom_bar(position = "stack") +
+  labs(x = "Type of 'Other'", y = "Count", legend = "Partisanship")
+
+
+################### Checking validity of Dictionary Model ########################
+
+truepos.data <- filter(data, (Level_A == "OFF" & offensive == 1)|
+                         (Level_A == "OFF" & offensive == 2))
+trueneg.data <- filter(data, (Level_A == "NOT" & offensive == 0))
+
+falsepos.data <- filter(data, (Level_A == "NOT" & offensive == 1)|
+                          (Level_A == "NOT" & offensive == 2))
+falseneg.data <- filter(data, (Level_A == "OFF" & offensive == 0))
+
+
+(399/500)*100                #Accuracy - (true positive + true negative)/all cases
+(17/(17+15))*100             #Precision - true positive/(true positive + false positive)
+(17/(17+86))*100             #Sensitivity(recall) - true positive/(true positive + false negative)
+(382/(382+15))*100                #Specificity - true negative/(true negative + false positive)
+
+## F score - better test of accuracy. 2((precision*recall)/(precision+recall))
+(((17/(17+15)))*((17/(17+86))))/(((17/(17+15)))+((17/(17+86))))*2
+
+
+####################### Building Machine Learning ################################
+
+library(quanteda.textmodels)
+library(caret)
+library(e1071) 
+
+## Create corpus, dataframe & training set
+
+sample.data$Tweet <- as.character(sample.data$Tweet)
+sample_corpus <- corpus(sample.data, text_field = "Tweet")
+
+dfmat_test <- sample_corpus
+dfmat_test <- dfm(dfmat_test, remove = stopwords("en"), stem = TRUE)
+
+dfmat_training <- tweet_corpus
+dfmat_training <- dfm(dfmat_training, remove = stopwords("en"), stem = TRUE)
+
+## Level A - Train Bayes classifier
+
+tmod_nbA <- textmodel_nb(dfmat_training, dfmat_training$Level_A)
+summary(tmod_nbA)
+
+dfmat_matchedA <- dfm_match(dfmat_test, features = featnames(dfmat_training))
+summary(dfmat_matchedA)
+
+actual_classA <- dfmat_matchedA$Level_A
+predicted_classA <- predict(tmod_nbA, newdata = dfmat_matchedA)
+summary(predicted_classA)
+
+sample.data$predicted_A <- predicted_classA
+
+## Level B - Bayes classifier
+
+tmod_nbB <- textmodel_nb(dfmat_training, dfmat_training$Level_B)
+summary(tmod_nbB)
+
+dfmat_matchedB <- dfm_match(dfmat_test, features = featnames(dfmat_training))
+summary(dfmat_matchedB)
+
+predicted_classB <- predict(tmod_nbB, newdata = dfmat_matchedB)
+summary(predicted_classB)
+
+sample.data$predicted_B <- predicted_classB
+
+## Level C - Bayes classifier
+
+tmod_nbC <- textmodel_nb(dfmat_training, dfmat_training$Level_C)
+summary(tmod_nbC)
+
+dfmat_matchedC <- dfm_match(dfmat_test, features = featnames(dfmat_training))
+summary(dfmat_matchedC)
+
+predicted_classC <- predict(tmod_nbC, newdata = dfmat_matchedC)
+summary(predicted_classC)
+
+sample.data$predicted_C <- predicted_classC
+
+## Partisanship - Train Baynes Classifier
+
+tmod_nb.partisan <- textmodel_nb(dfmat_training, dfmat_training$Partisan)
+summary(tmod_nb.partisan)
+
+dfmat_matched.partisan <- dfm_match(dfmat_test, features = featnames(dfmat_training))
+summary(dfmat_matched.partisan)
+
+actual_class.partisan <- dfmat_matched.partisan$Partisan
+predicted_class.partisan <- predict(tmod_nb.partisan, newdata = dfmat_matched.partisan)
+summary(predicted_class.partisan)
+
+sample.data$predicted_partisan <- predicted_class.partisan
+
+##################### Bayes Classifier - Explorative Analysis ##########################
+
+## Offensive and partisan
+
+partisan_hate <- select(sample.data, Tweet, predicted_A, predicted_partisan)
+partisan_hate$A_partisan <- ifelse((partisan_hate$predicted_A == "OFF" & partisan_hate$predicted_partisan == "R"), 1, 
+                                         ifelse((partisan_hate$predicted_A == "OFF" & partisan_hate$predicted_partisan == "L"), 2, 
+                                                ifelse((partisan_hate$predicted_A == "OFF" & partisan_hate$predicted_partisan == "Neut"), 3, 0)))
+partisan_hate$A_partisan <- na_if(partisan_hate$A_partisan, "0")
+partisan_hate$A_partisan <- as.character(as.numeric(partisan_hate$A_partisan))
+
+table(partisan_hate$A_partisan)
+
+ggplot(remove_missing(partisan_hate, na.rm = TRUE, vars = "A_partisan"), aes(x = A_partisan)) +
+  geom_bar(aes(fill = A_partisan)) +
+  scale_x_discrete(labels = as_labeller(c("1" = "Pro-Brexit", "2" = "Anti-Brexit", "3" = "Neutral"))) +
+  theme(legend.position = "none") +
+  labs(x = "Partisanship", y = "Count")
+
+## Targetted Offensive Partisanship
+
+partisan_target <- select(sample.data, Tweet, predicted_B, predicted_partisan)
+partisan_target$B_partisan <- ifelse((partisan_target$predicted_B == "TIN" & partisan_target$predicted_partisan == "R"), 1, 
+                                   ifelse((partisan_target$predicted_B == "TIN" & partisan_target$predicted_partisan == "L"), 2, 
+                                          ifelse((partisan_target$predicted_B == "TIN" & partisan_target$predicted_partisan == "Neut"), 3,
+                                                 ifelse((partisan_target$predicted_B == "UNT" & partisan_target$predicted_partisan == "R"), 4,
+                                                        ifelse((partisan_target$predicted_B == "UNT" & partisan_target$predicted_partisan == "L"), 5,
+                                                               ifelse((partisan_target$predicted_B == "UNT" & partisan_target$predicted_partisan == "Neut"), 6, 0))))))
+partisan_target$B_partisan <- na_if(partisan_target$B_partisan, "0")
+
+partisan_target$B_partisan <- as.character(as.numeric(partisan_target$B_partisan))
+table(partisan_target$B_partisan)
+
+
+ggplot(remove_missing(partisan_target, na.rm = TRUE, vars = "B_partisan"), aes(x = B_partisan)) +
+  geom_bar(aes(fill = B_partisan)) +
+  scale_x_discrete(labels = as_labeller(c("1" = "Targeted (Pro-Brexit)", "2" = "Targeted (Anti-Brexit)", "3" = "Targeted (Neutral)" , "4" = "Untargeted (Pro-Brexit)" , "5" = "Untargeted (Anti--Brexit)", "6" = "Untargeted (Neutral)"))) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), legend.position = "none") +
+  labs(x = "Tweet Target", y = "Count")
+
+##Level C targetted offensive partisanship
+partisan_C <- select(sample.data, Tweet, predicted_C, predicted_partisan)
+partisan_C$C_partisan <- ifelse((partisan_C$predicted_C == "GRP" & partisan_C$predicted_partisan == "R"), 1, 
+                                     ifelse((partisan_C$predicted_C == "GRP" & partisan_C$predicted_partisan == "L"), 2, 
+                                            ifelse((partisan_C$predicted_C == "GRP" & partisan_C$predicted_partisan == "Neut"), 3,
+                                                   ifelse((partisan_C$predicted_C == "IND" & partisan_C$predicted_partisan == "R"), 4,
+                                                          ifelse((partisan_C$predicted_C == "IND" & partisan_C$predicted_partisan == "L"), 5,
+                                                                 ifelse((partisan_C$predicted_C == "IND" & partisan_C$predicted_partisan == "Neut"), 6,
+                                                                        ifelse((partisan_C$predicted_C == "OTH" & partisan_C$predicted_partisan == "R"), 7,
+                                                                               ifelse((partisan_C$predicted_C == "OTH" & partisan_C$predicted_partisan == "L"), 8,
+                                                                                      ifelse((partisan_C$predicted_C == "OTH" & partisan_C$predicted_partisan == "Neut"), 9, 0)))))))))
+partisan_C$C_partisan <- na_if(partisan_C$C_partisan, "0")
+partisan_C$C_partisan <- as.character(as.numeric(partisan_C$C_partisan))
+
+table(partisan_C$C_partisan)
+view(partisan_C)
+
+ggplot(remove_missing(partisan_C, na.rm = TRUE, vars = "C_partisan"), aes(x = C_partisan)) +
+  geom_bar(aes(fill = C_partisan)) +
+  scale_x_discrete(labels = as_labeller(c("1" = "Group (Pro-Brexit)", "2" = "Group (Anti-Brexit)", "3" = "Group (Neutral)" , "4" = "Individual (Pro-Brexit)" , "5" = "Individual (Anti-Brexit)", "6" = "Individual (Neutral)" , "7" = "Other (Pro-Brexit)", "8" = "Other (Anti-Brexit)", "9" = "Other (Neutral)"))) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1), legend.position = "none") +
+  labs(x = "Target Type", y = "Count")
