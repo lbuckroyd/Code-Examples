@@ -1,0 +1,219 @@
+## Dissertation - Produce Clean Data File ##
+## Date: 10/11/21
+
+rm(list=ls())
+setwd('C:/Users/Liddy/OneDrive - Durham University/Final Year/Dissertation/Coding/Data')
+
+### Load Packages ###
+
+library(tidyverse)
+library(haven)
+library(readxl)
+library(naniar)
+
+### Load Data ###
+
+BES_W17 <- read_sav("BES2019_W17.sav")  ## Load W17 data file (Nov 2019)
+BES_W20 <- read_sav("BES2019_W20.sav")  ## Load W20 data file (June 2020)
+
+Results <- read_excel("BES-2019-General-Election-results.xlsx")  ## Load election results for constituency-level controls
+
+### Selecting Columns ###
+BES_W17.clean <- BES_W17 %>%   ## Select desired columns to begin cleaned datasets 
+  select(id,
+         country,
+         pcon,
+         partyId,
+         partyIdStrength,
+         britishness,
+         efficacyTooMuchEffort,
+         efficacyNotUnderstand,
+         efficacyNoMatter,
+         efficacyPolCare,
+         gender,
+         p_socgrade,
+         p_education,
+         electionInterest,
+         discussPolDays)
+
+BES_W20.clean <- BES_W20 %>%   
+  select(id,
+         pcon,
+         partyId,
+         partyIdStrength,
+         britishness,
+         handleCorona,
+         )
+
+### Clean/rename/remove wave data ###
+
+#Removing don't knows for Britishness/Party ID
+
+BES_W17.clean <- BES_W17.clean %>%          ## Replacing don't know/no response with NA
+  replace_with_na(replace = list(partyId = c(9999, 10),
+                                 partyIdStrength = 9999,
+                                 britishness = 9999,
+                                 efficacyNoMatter = 9999,
+                                 efficacyTooMuchEffort = 9999,
+                                 efficacyNotUnderstand = 9999,
+                                 efficacyPolCare = 9999,
+                                 p_socgrade = c(7, 8),
+                                 p_education = c(19, 20),
+                                 electionInterest = 9999,
+                                 discussPolDays = 9999))
+
+BES_W17.clean <- BES_W17.clean %>%          ## Removing any na values in cleaned columns
+  drop_na(partyId, partyIdStrength, britishness)
+is.na(BES_W17.clean)
+
+BES_W20.clean <- BES_W20.clean %>%          ## Repeating for W20
+  replace_with_na(replace = list(partyId = c(9999, 10),
+                                 partyIdStrength = 9999,
+                                 britishness = 9999,
+                                 handleCorona = 9999))
+
+BES_W20.clean <- BES_W20.clean %>%          
+  drop_na(partyId, partyIdStrength, britishness, handleCorona)
+is.na(BES_W20.clean)
+
+
+### Removing non-recurring respondents ###
+
+BES_W17.clean <- BES_W17.clean %>%
+  filter(BES_W17.clean$id %in% BES_W20.clean$id)       ## Filter by IDs that occur in both W17 and W20
+all(BES_W17.clean$id %in% BES_W20.clean$id)            ## Check non-recurring IDs have been removed
+
+BES_W20.clean <- BES_W20.clean %>%                     ## Repeat for W20
+  filter(BES_W20.clean$id %in% BES_W17.clean$id)
+all(BES_W20.clean$id %in% BES_W17.clean$id)
+
+
+### Merging Dataframes ###
+
+BES.clean <- merge(BES_W17.clean, BES_W20.clean, by = 'id')
+view(BES.clean)
+
+col_names <- c('id',           ## Renaming columns to distinguish W17 and W20
+                 'country', 
+                 'pcon', 
+                 'partyId_pre', 
+                 'partyIdStrength_pre', 
+                 'britishness_pre',
+                 'efficacyTooMuchEffort',
+                 'efficacyNotUnderstand',
+                 'efficacyNoMatter',
+                 'efficacyPolCare',
+               'gender',
+               'socgrade',
+               'education',
+               'electionInterest',
+               'freqconversation',
+                 'pcon_post',
+                 'partyId_post',
+                 'partyIdStrength_post',
+                 'britishness_post',
+                 'handleCorona')
+colnames(BES.clean) <- col_names
+
+### Creating grouped party ID variable ###
+
+BES.clean <- BES.clean %>%
+  mutate(partyID = case_when(partyId_pre > 7 ~ 7,
+                             partyId_pre == 7 ~ 6,
+                             partyId_pre == 6 ~ 7,
+                             TRUE ~ as.numeric(partyId_pre)))
+table(BES.clean$partyID)
+
+### Renaming country variable ###
+
+BES.clean <- BES.clean %>%
+  mutate(country = case_when(country == '1' ~ 'ENG',
+                             country == '2' ~ 'SCOT',
+                             country == '3' ~ 'WALES',
+                             TRUE ~ as.character(country)))
+BES.clean <- BES.clean %>%
+  mutate(wales = case_when(country == 'WALES' ~ '1',
+                           country == 'SCOT' ~ '0',
+                           country == 'ENG' ~ '0',
+                           TRUE ~ as.character(country)))
+BES.clean <- BES.clean %>%
+  mutate(scotland = case_when(country == 'WALES' ~ '0',
+                           country == 'SCOT' ~ '1',
+                           country == 'ENG' ~ '0',
+                           TRUE ~ as.character(country)))
+BES.clean <- BES.clean %>%
+  mutate(england = case_when(country == 'WALES' ~ '0',
+                              country == 'SCOT' ~ '0',
+                              country == 'ENG' ~ '1',
+                              TRUE ~ as.character(country)))
+t
+BES.clean$wales <- as.numeric(as.character(BES.clean$wales))
+BES.clean$scotland <- as.numeric(as.character(BES.clean$scotland))
+BES.clean$england <- as.numeric(as.character(BES.clean$england))
+
+
+### Create a combined efficacy variable ###
+
+BES.clean <- BES.clean %>%                    
+  mutate(efficacy = efficacyTooMuchEffort + 
+           efficacyNotUnderstand +
+           efficacyNoMatter + 
+           efficacyPolCare)
+
+### Creating independent and dependent variables ###
+
+BES.clean <- BES.clean %>%                    ## Creating dependent variable of change in identity
+  mutate(id_change = -1*(britishness_pre - britishness_post))
+
+BES.clean <- BES.clean %>%                    ## Creating dummy variable for winning/losing - 1=win, 0=lose
+  mutate(winlose_nat = case_when(partyID > 1 ~ 0,
+                             TRUE ~ 1))
+
+### Creating constituency results dataset ###
+
+BES_con.clean <- BES.clean %>%                     ## Subsetting cases where individual has not moved
+  subset(pcon == pcon_post)
+
+BES_con.clean <- merge(BES.clean, Results, by = 'pcon')
+view(BES_con.clean)
+
+
+## Create dummy variables for H2
+
+BES_con.clean <- BES_con.clean %>%          ## Replacing don't know/no response with NA
+  replace_with_na(replace = list(Winner19 = 'Speaker'))
+
+BES_con.clean <- BES_con.clean %>%          ## Removing any na values in cleaned columns
+  drop_na(Winner19)
+
+BES_con.clean <- BES_con.clean %>%                    ## Creating easier results variable that can be mapped directly to partyID
+  mutate(result = case_when(Winner19 == 'CON' ~ '1',
+                            Winner19 == 'LAB' ~ '2',
+                            Winner19 == 'LD' ~ '3',
+                            Winner19 == 'SNP' ~ '4',
+                            Winner19 == 'PC' ~ '5',
+                            Winner19 == 'G' ~ '6',
+                             TRUE ~ as.character(Winner19)))
+table(BES_con.clean$result)
+
+
+BES_con.clean <- BES_con.clean %>%      ##Win-win dummy variable
+  mutate(winwin = ifelse(partyID == '1' & result == '1', 1, 0))
+table(BES_con.clean$winwin)
+
+BES_con.clean <- BES_con.clean %>%      ##Win-lose dummy variable
+  mutate(winlose = ifelse(partyID == '1' & result != '1', 1, 0))
+table(BES_con.clean$winlose)
+
+BES_con.clean <- BES_con.clean %>%      ##lose-win dummy variable
+  mutate(losewin = ifelse(partyID > '1' & partyID == result, 1, 0))
+table(BES_con.clean$losewin)
+
+BES_con.clean <- BES_con.clean %>%      ##lose-lose dummy variable
+  mutate(loselose = ifelse(partyID > '1' & partyID != result , 1, 0))
+table(BES_con.clean$loselose)
+
+### Producing dataset for stepwise regression ###
+
+BES.clean2 <- BES.clean %>%          
+  drop_na(efficacy, education, socgrade, freqconversation, electionInterest, gender)
