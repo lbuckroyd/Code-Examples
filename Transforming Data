@@ -1,3 +1,6 @@
+### Transforming a data file
+## 15/10/2023
+
 Wave2 <- read_csv("FON_survey_9866_combined.csv")
 
 Q26 <- select(Wave2, `Q26`)
